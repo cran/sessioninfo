@@ -14,6 +14,12 @@ test_that("dependent_packages", {
   )
   mockery::stub(
     dependent_packages,
+    'loadedNamespaces',
+    function() ins
+  )
+
+  mockery::stub(
+    dependent_packages,
     'getNamespaceVersion',
     function(x) alldsc[[x]]$Version
   )
@@ -22,15 +28,20 @@ test_that("dependent_packages", {
     'search',
     function() paste0("package:", dep$package[dep$attached])
   )
+  mockery::stub(
+    dependent_packages,
+    'getNamespaceInfo',
+    function(x, ...) alldsc[[x]]$Version
+  )
 
-  exp <- dep[, setdiff(colnames(dep), "path")]
-  tec <- dependent_packages("devtools")
-  tec <- tec[, setdiff(colnames(tec), "path")]
+  exp <- dep[, setdiff(colnames(dep), c("path", "loadedpath"))]
+  tec <- dependent_packages("devtools", NA)
+  tec <- tec[, setdiff(colnames(tec), c("path", "loadedpath"))]
   expect_equal(exp, tec)
 })
 
-test_that("pkg_path", {
-  p1 <- pkg_path(utils::packageDescription("stats"))
+test_that("pkg_path_disk", {
+  p1 <- pkg_path_disk(utils::packageDescription("stats"))
   expect_equal(
     read.dcf(file.path(p1, "DESCRIPTION"))[, "Package"],
     c(Package = "stats")
@@ -60,27 +71,5 @@ test_that("find_deps", {
   expect_equal(
     find_deps("foobar", top_dep = character(), rec_dep = character()),
     "foobar"
-  )
-})
-
-test_that("standardise_dep", {
-
-  cases <- list(
-    NA,
-    TRUE,
-    FALSE,
-    "Imports"
-  )
-
-  for (c in cases) {
-    expect_true(
-      all(standardise_dep(c) %in%
-          c("Depends", "Imports", "Suggests", "LinkingTo"))
-    )
-  }
-
-  expect_error(
-    standardise_dep(list(1,2,3)),
-    "Dependencies must be a boolean or a character"
   )
 })

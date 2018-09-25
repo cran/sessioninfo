@@ -4,7 +4,7 @@
 \alias{package_info}
 \title{Information about the currently loaded packages, or about a chosen set}
 \usage{
-package_info(pkgs = NULL, include_base = FALSE)
+package_info(pkgs = NULL, include_base = FALSE, dependencies = NA)
 }
 \arguments{
 \item{pkgs}{Either a vector of package names or NULL. If \code{NULL},
@@ -13,26 +13,37 @@ all dependencies of the package.}
 
 \item{include_base}{Include base packages in summary? By default this is
 false since base packages should always match the R version.}
+
+\item{dependencies}{Whether to include the (recursive) dependencies
+as well. See the \code{dependencies} argument of \code{\link[utils:install.packages]{utils::install.packages()}}.}
 }
 \value{
 A data frame with columns:
-  * `package`: package name.
-  * `loadedversion`: package version. This is the version of the loaded
-    namespace if `pkgs` is `NULL`, and it is the version of the package
-    on disk otherwise. The two of them are almost always the same,
-    though.
-  * `ondiskversion`: package version (on the disk, which is sometimes
-    not the same as the loaded version).
-  * `path`: path to the package on disk.
-  * `attached`: logical, whether the package is attached to the search
-    path.
-  * `is_base`: logical, whether the package is a base package.
-  * `date`: the date the package was installed or built.
-  * `source`: where the package was installed from. E.g.
-    `CRAN`, `GitHub`, `local` (from the local machine), etc.
+\itemize{
+\item \code{package}: package name.
+\item \code{ondiskversion}: package version (on the disk, which is sometimes
+not the same as the loaded version).
+\item \code{loadedversion}: package version. This is the version of the loaded
+namespace if \code{pkgs} is \code{NULL}, and it is the version of the package
+on disk otherwise. The two of them are almost always the same,
+though.
+\item \code{path}: path to the package on disk.
+\item \code{loadedpath}: the path the package was originally loaded from.
+\item \code{attached}: logical, whether the package is attached to the search
+path.
+\item \code{is_base}: logical, whether the package is a base package.
+\item \code{date}: the date the package was installed or built.
+\item \code{source}: where the package was installed from. E.g.
+\code{CRAN}, \code{GitHub}, \code{local} (from the local machine), etc.
+\item \code{md5ok}: Whether MD5 hashes for package DLL files match, on Windows.
+\code{NA} on other platforms.
+\item \code{library}: factor, which package library the package was loaded from.
+For loaded packages, this is (the factor representation of)
+\code{loadedpath}, for others \code{path}.
+}
 
-See [session_info()] for the description of the *printed* columns
-by `package_info` (as opposed to the *returned* columns).
+See \code{\link[=session_info]{session_info()}} for the description of the \emph{printed} columns
+by \code{package_info} (as opposed to the \emph{returned} columns).
 }
 \description{
 Information about the currently loaded packages, or about a chosen set

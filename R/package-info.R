@@ -6,21 +6,29 @@
 #'   all dependencies of the package.
 #' @param include_base Include base packages in summary? By default this is
 #'   false since base packages should always match the R version.
+#' @param dependencies Whether to include the (recursive) dependencies
+#'   as well. See the `dependencies` argument of [utils::install.packages()].
 #' @return A data frame with columns:
 #'   * `package`: package name.
+#'   * `ondiskversion`: package version (on the disk, which is sometimes
+#'     not the same as the loaded version).
 #'   * `loadedversion`: package version. This is the version of the loaded
 #'     namespace if `pkgs` is `NULL`, and it is the version of the package
 #'     on disk otherwise. The two of them are almost always the same,
 #'     though.
-#'   * `ondiskversion`: package version (on the disk, which is sometimes
-#'     not the same as the loaded version).
 #'   * `path`: path to the package on disk.
+#'   * `loadedpath`: the path the package was originally loaded from.
 #'   * `attached`: logical, whether the package is attached to the search
 #'     path.
 #'   * `is_base`: logical, whether the package is a base package.
 #'   * `date`: the date the package was installed or built.
 #'   * `source`: where the package was installed from. E.g.
 #'     `CRAN`, `GitHub`, `local` (from the local machine), etc.
+#'   * `md5ok`: Whether MD5 hashes for package DLL files match, on Windows.
+#'     `NA` on other platforms.
+#'   * `library`: factor, which package library the package was loaded from.
+#'     For loaded packages, this is (the factor representation of)
+#'     `loadedpath`, for others `path`.
 #'
 #' See [session_info()] for the description of the *printed* columns
 #' by `package_info` (as opposed to the *returned* columns).
@@ -30,15 +38,16 @@
 #' package_info()
 #' package_info("sessioninfo")
 
-package_info <- function(pkgs = NULL, include_base = FALSE) {
+package_info <- function(pkgs = NULL, include_base = FALSE,
+                         dependencies = NA) {
 
   if (is.null(pkgs)) {
     pkgs <- loaded_packages()
   } else {
-    pkgs <- dependent_packages(pkgs)
+    pkgs <- dependent_packages(pkgs, dependencies)
   }
 
-  desc <- lapply(pkgs$package, utils::packageDescription)
+  desc <- lapply(pkgs$package, utils::packageDescription, lib.loc = .libPaths())
 
   pkgs$is_base <- vapply(
     desc, function(x) identical(x$Priority, "base"), logical(1)
@@ -46,11 +55,21 @@ package_info <- function(pkgs = NULL, include_base = FALSE) {
 
   pkgs$date <- vapply(desc, pkg_date, character(1))
   pkgs$source <- vapply(desc, pkg_source, character(1))
+  pkgs$md5ok <- vapply(desc, pkg_md5ok_dlls, logical(1))
+
+  libpath <- pkg_lib_paths()
+  path <- ifelse(is.na(pkgs$loadedpath), pkgs$path, pkgs$loadedpath)
+  pkgs$library <- factor(dirname(path), levels = libpath)
 
   if (!include_base) pkgs <- pkgs[! pkgs$is_base, ]
 
+  rownames(pkgs) <- pkgs$package
   class(pkgs) <- c("packages_info", "data.frame")
   pkgs
+}
+
+pkg_lib_paths <- function() {
+  normalizePath(.libPaths(), winslash = "/")
 }
 
 pkg_date <- function (desc) {
@@ -75,7 +94,7 @@ pkg_source <- function(desc) {
                   desc$GithubUsername, "/",
                   desc$GithubRepo, "@",
                   substr(desc$GithubSHA1, 1, 7), ")")
-  } else if (!is.null(desc$RemoteType)) {
+  } else if (!is.null(desc$RemoteType) && desc$RemoteType != "cran") {
     # want to generate these:
     # remoteType (username/repo@commit)
     # remoteType (username/repo)
@@ -125,24 +144,92 @@ pkg_source <- function(desc) {
   }
 }
 
+pkg_md5ok_dlls <- function(desc) {
+  if (.Platform$OS.type != "windows") return(NA)
+  pkgdir <- dirname(dirname(attr(desc, "file")))
+  if (!file.exists(file.path(pkgdir, "libs"))) return(TRUE)
+  stored <- pkg_md5_stored(pkgdir)
+  if (is.null(stored)) return(NA)
+  disk <- pkg_md5_disk(pkgdir)
+  identical(stored, disk)
+}
+
+pkg_md5_stored <- function(pkgdir) {
+  md5file <- file.path(pkgdir, "MD5")
+  md5 <- tryCatch(
+    suppressWarnings(readLines(md5file)),
+    error = function(e) NULL)
+  if (is.null(md5)) return(NULL)
+  hash <- sub(" .*$", "", md5)
+  filename <- sub("^[^ ]* \\*", "", md5)
+  dll <- grep("[dD][lL][lL]$", filename)
+  order_by_name(structure(hash[dll], names = tolower(filename[dll])))
+}
+
+pkg_md5_disk <- function(pkgdir) {
+  withr::with_dir(pkgdir, {
+    dll_files <- file.path(
+      "libs",
+      dir("libs", pattern = "[dD][lL][lL]$", recursive = TRUE))
+    md5_files <- tools::md5sum(dll_files)
+    order_by_name(structure(unname(md5_files), names = tolower(dll_files)))
+  })
+}
+
 #' @export
 
 print.packages_info <- function(x, ...) {
 
-  badloaded <- package_version(x$loadedversion) !=
-               package_version(x$ondiskversion)
+  unloaded <- is.na(x$loadedversion)
+  flib <- function(x) ifelse(is.na(x), "?", as.integer(x))
 
   px <- data.frame(
     package = x$package,
     "*"     = ifelse(x$attached, "*", ""),
-    version = paste0(x$loadedversion, ifelse(badloaded, " (!)", "")),
+    version = ifelse(unloaded, x$ondiskversion, x$loadedversion),
     date    = x$date,
+    lib     = paste0("[", flib(x$library), "]"),
     source  = x$source,
     stringsAsFactors = FALSE,
     check.names = FALSE
   )
 
-  print.data.frame(px, right = FALSE, row.names = FALSE)
+  badloaded <- package_version(x$loadedversion, strict = FALSE) !=
+               package_version(x$ondiskversion)
+  badloaded <- !is.na(badloaded) & badloaded
+
+  badmd5 <- !is.na(x$md5ok) & !x$md5ok
+
+  badpath <- !is.na(x$loadedpath) & x$loadedpath != x$path
+
+  if (any(badloaded) || any(badmd5) || any(badpath)) {
+    prob <- paste0(
+      ifelse(badloaded, "V", ""),
+      ifelse(badpath, "P", ""),
+      ifelse(badmd5, "D", ""))
+    px <- cbind("!" = prob, px)
+  }
+
+  withr::local_options(list(max.print = 99999))
+  pr <- print.data.frame(px, right = FALSE, row.names = FALSE)
+
+  cat("\n")
+  lapply(
+    seq_along(levels(x$library)),
+    function(i) cat_ln(paste0("[", i, "] ", levels(x$library)[i])))
+
+  if ("!" %in% names(px)) cat("\n")
+  if (any(badloaded)) {
+    cat_ln(" V ", dash(2), " Loaded and on-disk version mismatch.")
+  }
+  if (any(badpath))  {
+    cat_ln(" P ", dash(2), " Loaded and on-disk path mismatch.")
+  }
+  if (any(badmd5)) {
+    cat_ln(" D ", dash(2), " DLL MD5 mismatch, broken installation.")
+  }
+
+  invisible(x)
 }
 
 #' @export

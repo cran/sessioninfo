@@ -3,13 +3,14 @@
 #'
 #' @return A list with elements:
 #'   * `version`: the R version string.
-#'   * `os`: the OS name in human readable format, see [osname()].
+#'   * `os`: the OS name in human readable format, see [os_name()].
 #'   * `system`: CPU, and machine readable OS name, separated by a comma.
 #'   * `ui`: the user interface, e.g. `Rgui`, `RTerm`, etc. see `GUI`
 #'     in [base::.Platform].
 #'   * `language`: The current language setting. The `LANGUAGE` environment
 #'     variable, if set, or `(EN)` if unset.
 #'   * `collate`: Collation rule, from the current locale.
+#'   * `ctype`: Native character encoding, from the current locale.
 #'   * `tz`: The current time zone.
 #'   * `date`: The current date.
 #'
@@ -29,6 +30,7 @@ platform_info <- function() {
     ui = .Platform$GUI,
     language = Sys.getenv("LANGUAGE", "(EN)"),
     collate = Sys.getlocale("LC_COLLATE"),
+    ctype = Sys.getlocale("LC_CTYPE"),
     tz = Sys.timezone(),
     date = format(Sys.Date())
   ), class = "platform_info")
@@ -38,6 +40,7 @@ platform_info <- function() {
 
 print.platform_info <- function(x, ...) {
   df <- data.frame(setting = names(x), value = unlist(x), stringsAsFactors = FALSE)
+  withr::local_options(list(max.print = 99999))
   print(df, right = FALSE, row.names = FALSE)
 }
 
