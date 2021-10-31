@@ -1,11 +1,10 @@
 
-context("platform_info")
-
 test_that("platform_info", {
   pi <- platform_info()
   expect_equal(
     names(pi),
-    c("version", "os", "system", "ui", "language", "collate", "ctype", "tz", "date")
+    c("version", "os", "system", "ui", "language", "collate", "ctype",
+      "tz", "date", "pandoc")
   )
 
   ## This can be a variety of strings, e.g. "R Under development"
@@ -14,13 +13,13 @@ test_that("platform_info", {
   expect_true(is_string(pi$system) && grepl(",", pi$system))
   expect_true(is_string(pi$ui))
   expect_true(is_string(pi$language))
-  expect_true(is_string(pi$tz))
+  expect_true(is_string(pi$tz) || identical(pi$tz, NA_character_))
   expect_true(is_string(pi$date))
   expect_equal(pi$date, as.character(as.Date(pi$date)))
 })
 
 test_that("print.platform_info", {
-  expect_output(print(platform_info()), "setting  value", fixed = TRUE)
+  expect_output(print(platform_info()), "setting[ ]+value")
 })
 
 test_that("print.platform_info ignores max.print", {

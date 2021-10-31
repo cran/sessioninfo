@@ -13,17 +13,19 @@
 #'   * `ctype`: Native character encoding, from the current locale.
 #'   * `tz`: The current time zone.
 #'   * `date`: The current date.
+#'   * `rstudio`: RStudio format string, only added in RStudio.
+#'   * `pandoc`: pandoc version and path
 #'
 #' @seealso Similar functions and objects in the base packages:
 #'   [base::R.version.string], [utils::sessionInfo()], [base::version],
 #'   [base::.Platform], [base::Sys.getlocale()], [base::Sys.timezone()].
 #'
 #' @export
-#' @examples
+#' @examplesIf FALSE
 #' platform_info()
 
 platform_info <- function() {
-  structure(list(
+  as_platform_info(drop_null(list(
     version = R.version.string,
     os = os_name(),
     system = version$system,
@@ -32,21 +34,82 @@ platform_info <- function() {
     collate = Sys.getlocale("LC_COLLATE"),
     ctype = Sys.getlocale("LC_CTYPE"),
     tz = Sys.timezone(),
-    date = format(Sys.Date())
-  ), class = "platform_info")
+    date = format(Sys.Date()),
+    rstudio = get_rstudio_version(),
+    pandoc = get_pandoc_version()
+  )))
+}
+
+get_rstudio_version <- function() {
+  tryCatch({
+    ver <- get("RStudio.Version", "tools:rstudio")()
+    paste0(
+      ver$long_version %||% ver$version,
+      if (!is.null(ver$release_name)) paste0(" ", ver$release_name),
+      " (", ver$mode, ")"
+    )
+  }, error = function(e) NULL)
+}
+
+get_pandoc_version <- function() {
+  if (isNamespaceLoaded("rmarkdown")) {
+    ver <- rmarkdown::find_pandoc()
+    if (is.null(ver$dir)) {
+      "NA (via rmarkdown)"
+    } else {
+      paste0(ver$version, " @ ", ver$dir, "/ (via rmarkdown)")
+    }
+  } else {
+    path <- Sys.which("pandoc")
+    if (path == "") {
+      "NA"
+    } else {
+      ver <- parse_pandoc_version(path)
+      paste0(ver, " @ ", path)
+    }
+  }
+}
+
+parse_pandoc_version <- function(path) {
+  tryCatch({
+    out <- system2(path, "--version", stdout = TRUE)[1]
+    last(strsplit(out, " ", fixed = TRUE)[[1]])
+  }, error = function(e) "NA")
+}
+
+#' @export
+
+format.platform_info <- function(x, ...) {
+  df <- data.frame(
+    setting = names(x),
+    value = unlist(x),
+    stringsAsFactors = FALSE
+  )
+  format_df(df)
 }
 
 #' @export
 
 print.platform_info <- function(x, ...) {
-  df <- data.frame(setting = names(x), value = unlist(x), stringsAsFactors = FALSE)
-  withr::local_options(list(max.print = 99999))
-  print(df, right = FALSE, row.names = FALSE)
+  cat(format(x, ...), sep = "\n")
 }
 
 #' @export
-#' @importFrom utils capture.output
 
 as.character.platform_info <- function(x, ...) {
-  capture.output(print(x))
+  old <- options(cli.num_colors = 1)
+  on.exit(options(old), add = TRUE)
+  format(x, ...)
+}
+
+#' @export
+
+c.platform_info <- function(...) {
+  as_platform_info(NextMethod())
+}
+
+as_platform_info <- function(x) {
+  stopifnot(is.list(x))
+  class(x) <- c("platform_info", "list")
+  x
 }

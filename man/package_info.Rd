@@ -4,12 +4,21 @@
 \alias{package_info}
 \title{Information about the currently loaded packages, or about a chosen set}
 \usage{
-package_info(pkgs = NULL, include_base = FALSE, dependencies = NA)
+package_info(
+  pkgs = c("!loaded", "!attached", "!installed")[1],
+  include_base = FALSE,
+  dependencies = NA
+)
 }
 \arguments{
-\item{pkgs}{Either a vector of package names or NULL. If \code{NULL},
-displays all loaded packages. If a character vector, also, includes
-all dependencies of the package.}
+\item{pkgs}{Which packages to show. It may be:
+\itemize{
+\item \code{NULL} or \code{"!loaded"}: show all loaded packages,
+\item \code{"!attached"}: show all attached packages,
+\item \code{"!installed"}: show all installed packages,
+\item a character vector of package names. Their (hard) dependencies are
+also shown by default, see the \code{dependencies} argument.
+}}
 
 \item{include_base}{Include base packages in summary? By default this is
 false since base packages should always match the R version.}
@@ -32,7 +41,7 @@ though.
 \item \code{attached}: logical, whether the package is attached to the search
 path.
 \item \code{is_base}: logical, whether the package is a base package.
-\item \code{date}: the date the package was installed or built.
+\item \code{date}: the date the package was installed or built, in UTC.
 \item \code{source}: where the package was installed from. E.g.
 \code{CRAN}, \code{GitHub}, \code{local} (from the local machine), etc.
 \item \code{md5ok}: Whether MD5 hashes for package DLL files match, on Windows.
@@ -49,6 +58,8 @@ by \code{package_info} (as opposed to the \emph{returned} columns).
 Information about the currently loaded packages, or about a chosen set
 }
 \examples{
+\dontshow{if (FALSE) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
 package_info()
 package_info("sessioninfo")
+\dontshow{\}) # examplesIf}
 }

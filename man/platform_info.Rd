@@ -13,23 +13,27 @@ A list with elements:
 \item \code{os}: the OS name in human readable format, see \code{\link[=os_name]{os_name()}}.
 \item \code{system}: CPU, and machine readable OS name, separated by a comma.
 \item \code{ui}: the user interface, e.g. \code{Rgui}, \code{RTerm}, etc. see \code{GUI}
-in \link[base:.Platform]{base::.Platform}.
+in \link[base:Platform]{base::.Platform}.
 \item \code{language}: The current language setting. The \code{LANGUAGE} environment
 variable, if set, or \code{(EN)} if unset.
 \item \code{collate}: Collation rule, from the current locale.
 \item \code{ctype}: Native character encoding, from the current locale.
 \item \code{tz}: The current time zone.
 \item \code{date}: The current date.
+\item \code{rstudio}: RStudio format string, only added in RStudio.
+\item \code{pandoc}: pandoc version and path
 }
 }
 \description{
 Information about the current platform
 }
 \examples{
+\dontshow{if (FALSE) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
 platform_info()
+\dontshow{\}) # examplesIf}
 }
 \seealso{
 Similar functions and objects in the base packages:
-\link[base:R.version.string]{base::R.version.string}, \code{\link[utils:sessionInfo]{utils::sessionInfo()}}, \link[base:version]{base::version},
-\link[base:.Platform]{base::.Platform}, \code{\link[base:Sys.getlocale]{base::Sys.getlocale()}}, \code{\link[base:Sys.timezone]{base::Sys.timezone()}}.
+\link[base:Version]{base::R.version.string}, \code{\link[utils:sessionInfo]{utils::sessionInfo()}}, \link[base:Version]{base::version},
+\link[base:Platform]{base::.Platform}, \code{\link[base:locales]{base::Sys.getlocale()}}, \code{\link[base:timezones]{base::Sys.timezone()}}.
 }

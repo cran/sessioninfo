@@ -4,15 +4,51 @@
 \alias{session_info}
 \title{Print session information}
 \usage{
-session_info(pkgs = NULL, include_base = FALSE)
+session_info(
+  pkgs = c("!loaded", "!attached", "!installed")[1],
+  include_base = FALSE,
+  info = c("auto", "all", "platform", "packages", "python", "external"),
+  dependencies = NA,
+  to_file = FALSE
+)
 }
 \arguments{
-\item{pkgs}{Either a vector of package names or NULL. If \code{NULL},
-displays all loaded packages. If a character vector, also, includes
-all dependencies of the package.}
+\item{pkgs}{Which packages to show. It may be:
+\itemize{
+\item \code{NULL} or \code{"!loaded"}: show all loaded packages,
+\item \code{"!attached"}: show all attached packages,
+\item \code{"!installed"}: show all installed packages,
+\item a character vector of package names. Their (hard) dependencies are
+also shown by default, see the \code{dependencies} argument.
+}}
 
 \item{include_base}{Include base packages in summary? By default this is
 false since base packages should always match the R version.}
+
+\item{info}{What information to show, it can be \code{"auto"} to choose
+automatically, \code{"all"} to show everything, or a character vector
+with elements from:
+\itemize{
+\item \code{"platform"}: show platform information via \code{\link[=platform_info]{platform_info()}},
+\item \code{"packages"}: show package information via \code{\link[=package_info]{package_info()}},
+\item \code{"python"}: show Python configuration via \code{\link[=python_info]{python_info()}},
+\item \code{"external"}: show information about external software, via
+\code{\link[=external_info]{external_info()}}.
+}}
+
+\item{dependencies}{Whether to include the (recursive) dependencies
+as well. See the \code{dependencies} argument of \code{\link[utils:install.packages]{utils::install.packages()}}.}
+
+\item{to_file}{Whether to print the session information to a file.
+If \code{TRUE} the name of the file will be \code{session-info.txt}, but
+\code{to_file} may also be a string to specify the file name.}
+}
+\value{
+A \code{session_info} object.
+
+If \code{to_file} is not \code{FALSE} then it is
+returned invisibly. (To print it to both a file and to the screen,
+use \code{(session_info(to_file = TRUE))}.)
 }
 \description{
 This is \code{\link[utils:sessionInfo]{utils::sessionInfo()}} re-written from scratch to both exclude
@@ -25,7 +61,7 @@ Columns in the \emph{printed} package list:
 \itemize{
 \item \code{package}: package name
 \item \code{*}: whether the package is attached to the search path
-\item \code{version}: package version. If the version is marked with \code{(!)} that
+\item \code{version}: package version. If the version is marked with \verb{(!)} that
 means that the loaded and the on-disk version of the package are
 different.
 \item \code{date}: when the package was built, if this information is available.
@@ -33,7 +69,7 @@ This is the \code{Date/Publication} or the \code{Built} field from
 \code{DESCRIPTION}. (These are usually added automatically by R.)
 Sometimes this data is not available, then it is \code{NA}.
 \item \code{source}: where the package was built or installed from, if available.
-Examples: \code{CRAN (R 3.3.2)}, \code{Github (r-lib/pkgbuild@8aab60b)},
+Examples: \verb{CRAN (R 3.3.2)}, \verb{Github (r-lib/pkgbuild@8aab60b)},
 \code{Bioconductor}, \code{local}.
 }
 
@@ -41,6 +77,8 @@ See \code{\link[=package_info]{package_info()}} for the list of columns in the d
 is \emph{returned} (as opposed to \emph{printed}).
 }
 \examples{
+\dontshow{if (FALSE) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
 session_info()
 session_info("sessioninfo")
+\dontshow{\}) # examplesIf}
 }

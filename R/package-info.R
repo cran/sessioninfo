@@ -1,9 +1,12 @@
 
 #' Information about the currently loaded packages, or about a chosen set
 #'
-#' @param pkgs Either a vector of package names or NULL. If \code{NULL},
-#'   displays all loaded packages. If a character vector, also, includes
-#'   all dependencies of the package.
+#' @param pkgs Which packages to show. It may be:
+#'   * `NULL` or `"!loaded"`: show all loaded packages,
+#'   * `"!attached"`: show all attached packages,
+#'   * `"!installed"`: show all installed packages,
+#'   * a character vector of package names. Their (hard) dependencies are
+#'     also shown by default, see the `dependencies` argument.
 #' @param include_base Include base packages in summary? By default this is
 #'   false since base packages should always match the R version.
 #' @param dependencies Whether to include the (recursive) dependencies
@@ -21,7 +24,7 @@
 #'   * `attached`: logical, whether the package is attached to the search
 #'     path.
 #'   * `is_base`: logical, whether the package is a base package.
-#'   * `date`: the date the package was installed or built.
+#'   * `date`: the date the package was installed or built, in UTC.
 #'   * `source`: where the package was installed from. E.g.
 #'     `CRAN`, `GitHub`, `local` (from the local machine), etc.
 #'   * `md5ok`: Whether MD5 hashes for package DLL files match, on Windows.
@@ -34,15 +37,25 @@
 #' by `package_info` (as opposed to the *returned* columns).
 #'
 #' @export
-#' @examples
+#' @examplesIf FALSE
 #' package_info()
 #' package_info("sessioninfo")
 
-package_info <- function(pkgs = NULL, include_base = FALSE,
-                         dependencies = NA) {
+package_info <- function(
+  pkgs = c("!loaded", "!attached", "!installed")[1],
+  include_base = FALSE,
+  dependencies = NA) {
 
-  if (is.null(pkgs)) {
+  if (is.null(pkgs)) pkgs <- "!loaded"
+  if (identical(pkgs, "!loaded")) {
     pkgs <- loaded_packages()
+
+  } else if (identical(pkgs, "!attached")) {
+    pkgs <- attached_packages()
+
+  } else if (identical(pkgs, "!installed")) {
+    pkgs <- installed_packages()
+
   } else {
     pkgs <- dependent_packages(pkgs, dependencies)
   }
@@ -102,6 +115,15 @@ pkg_source <- function(desc) {
                   desc$GithubUsername, "/",
                   desc$GithubRepo, "@",
                   substr(desc$GithubSHA1, 1, 7), ")")
+  } else if (!is.null(desc$RemoteType) && desc$RemoteType == "standard") {
+    if (!is.null(desc$Repository) && desc$Repository == "CRAN") {
+      pkg_source_cran(desc)
+    } else if (!is.null(desc$biocViews) && desc$biocViews != "") {
+      "Bioconductor"
+    } else {
+      "Custom"
+    }
+
   } else if (!is.null(desc$RemoteType) && desc$RemoteType != "cran") {
     # want to generate these:
     # remoteType (username/repo@commit)
@@ -113,6 +135,8 @@ pkg_source <- function(desc) {
     # RemoteUsername and RemoteRepo should always be present together
     if (!is.null(desc$RemoteUsername) && (!is.null(desc$RemoteRepo))) {
       user_repo <- paste0(desc$RemoteUsername, "/", desc$RemoteRepo)
+    } else if (!is.null(desc$RemoteUrl)) {
+      user_repo <- desc$RemoteUrl
     } else {
       user_repo <- NULL
     }
@@ -134,22 +158,30 @@ pkg_source <- function(desc) {
     str <- paste0(remote_type, user_repo_and_sha)
 
   } else if (!is.null(desc$Repository)) {
-    repo <- desc$Repository
-
-    if (!is.null(desc$Built)) {
-      built <- strsplit(desc$Built, "; ")[[1]]
-      ver <- sub("$R ", "", built[1])
-
-      repo <- paste0(repo, " (", ver, ")")
-    }
-
-    repo
+    pkg_source_cran(desc)
 
   } else if (!is.null(desc$biocViews) && desc$biocViews != "") {
     "Bioconductor"
+
+  } else if (isNamespaceLoaded(desc$Package) &&
+             !is.null(asNamespace(desc$Package)$.__DEVTOOLS__)) {
+    "load_all()"
+
   } else {
     "local"
   }
+}
+
+pkg_source_cran <- function(desc) {
+  repo <- desc$Repository
+
+  if (!is.null(desc$Built)) {
+    built <- strsplit(desc$Built, "; ")[[1]]
+    ver <- sub("$R ", "", built[1])
+    repo <- paste0(repo, " (", ver, ")")
+  }
+
+  repo
 }
 
 pkg_md5ok_dlls <- function(desc) {
@@ -176,36 +208,43 @@ pkg_md5_stored <- function(pkgdir) {
 }
 
 pkg_md5_disk <- function(pkgdir) {
-  withr::with_dir(pkgdir, {
-    dll_files <- file.path(
-      "libs",
-      dir("libs", pattern = "[dD][lL][lL]$", recursive = TRUE))
-    md5_files <- tools::md5sum(dll_files)
-    order_by_name(structure(unname(md5_files), names = tolower(dll_files)))
-  })
+  old <- getwd()
+  on.exit(setwd(old), add = TRUE)
+  setwd(pkgdir)
+  dll_files <- file.path(
+    "libs",
+    dir("libs", pattern = "[dD][lL][lL]$", recursive = TRUE))
+  md5_files <- tools::md5sum(dll_files)
+  order_by_name(structure(unname(md5_files), names = tolower(dll_files)))
 }
 
 #' @export
 
-print.packages_info <- function(x, ...) {
+format.packages_info <- function(x, ...) {
 
   unloaded <- is.na(x$loadedversion)
   flib <- function(x) ifelse(is.na(x), "?", as.integer(x))
 
   px <- data.frame(
-    package = x$package,
-    "*"     = ifelse(x$attached, "*", ""),
-    version = ifelse(unloaded, x$ondiskversion, x$loadedversion),
-    date    = x$date,
-    lib     = paste0("[", flib(x$library), "]"),
-    source  = x$source,
+    package      = x$package,
+    "*"          = ifelse(x$attached, "*", ""),
+    version      = ifelse(unloaded, x$ondiskversion, x$loadedversion),
+    "date (UTC)" = x$date,
+    lib          = paste0("[", flib(x$library), "]"),
+    source       = x$source,
     stringsAsFactors = FALSE,
     check.names = FALSE
   )
 
   badloaded <- package_version(x$loadedversion, strict = FALSE) !=
-               package_version(x$ondiskversion, strict = FALSE)
+    package_version(x$ondiskversion, strict = FALSE)
   badloaded <- !is.na(badloaded) & badloaded
+
+  px$source <- ifelse(
+    badloaded,
+    paste0(px$source, " (on disk ", x$ondiskversion, ")"),
+    px$source
+  )
 
   badmd5 <- !is.na(x$md5ok) & !x$md5ok
 
@@ -223,34 +262,69 @@ print.packages_info <- function(x, ...) {
     px <- cbind("!" = prob, px)
   }
 
-  withr::local_options(list(max.print = 99999))
-  pr <- print.data.frame(px, right = FALSE, row.names = FALSE)
+  dng <- function(x) cli::bg_red(cli::col_white(x))
 
-  cat("\n")
+  highlighters <- list(
+    "!" = function(x) {
+      ifelse(empty(x), x, dng(x))
+    },
+    version = function(x) {
+      highlight_version(x)
+    },
+    "date (UTC)" = function(x) {
+      cli::col_grey(x)
+    },
+    lib = function(x) {
+      cli::col_grey(x)
+    },
+    source = function(x) {
+      common <- grepl("^(Bioconductor|CRAN)", x)
+      x[!common] <- cli::style_bold(cli::col_magenta(x[!common]))
+      x[common] <- cli::col_grey(x[common])
+      x
+    }
+  )
+
+  fmt <- c(format_df(px, highlighters = highlighters), "")
+
   lapply(
     seq_along(levels(x$library)),
-    function(i) cat_ln(paste0("[", i, "] ", levels(x$library)[i])))
+    function(i) {
+      fmt <<- c(fmt, cli::col_grey(paste0(" [", i, "] ", levels(x$library)[i])))
+    }
+  )
 
-  if ("!" %in% names(px)) cat("\n")
+  if ("!" %in% names(px)) fmt <- c(fmt, "")
   if (any(badloaded)) {
-    cat_ln(" V ", dash(2), " Loaded and on-disk version mismatch.")
+    fmt <- c(fmt, paste0(" ", dng("V"), " ", dash(2),
+                         " Loaded and on-disk version mismatch."))
   }
   if (any(badpath))  {
-    cat_ln(" P ", dash(2), " Loaded and on-disk path mismatch.")
+    fmt <- c(fmt, paste0(" ", dng("P"), " ", dash(2),
+                         " Loaded and on-disk path mismatch."))
   }
   if (any(badmd5)) {
-    cat_ln(" D ", dash(2), " DLL MD5 mismatch, broken installation.")
+    fmt <- c(fmt, paste0(" ", dng("D"), " ", dash(2),
+                         " DLL MD5 mismatch, broken installation."))
   }
   if (any(baddel)) {
-    cat_ln(" R ", dash(2), " Package was removed from disk.")
+    fmt <- c(fmt, paste0(" ", dng("R"), " ", dash(2),
+                         " Package was removed from disk."))
   }
 
-  invisible(x)
+  fmt
 }
 
 #' @export
-#' @importFrom utils capture.output
+
+print.packages_info <- function(x, ...) {
+  cat(format(x, ...), sep = "\n")
+}
+
+#' @export
 
 as.character.packages_info <- function(x, ...) {
-  capture.output(print(x))
+  old <- options(cli.num_colors = 1)
+  on.exit(options(old), add = TRUE)
+  format(x, ...)
 }
