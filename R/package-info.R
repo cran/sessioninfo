@@ -114,10 +114,12 @@ pkg_source <- function(desc) {
     str <- paste0("Github (",
                   desc$GithubUsername, "/",
                   desc$GithubRepo, "@",
-                  substr(desc$GithubSHA1, 1, 7), ")")
+                  desc$GithubSHA1, ")")
   } else if (!is.null(desc$RemoteType) && desc$RemoteType == "standard") {
     if (!is.null(desc$Repository) && desc$Repository == "CRAN") {
       pkg_source_cran(desc)
+    } else if (!is.null(desc$Repository)) {
+      str_trim(desc$Repository, 10)
     } else if (!is.null(desc$biocViews) && desc$biocViews != "") {
       "Bioconductor"
     } else {
@@ -142,7 +144,7 @@ pkg_source <- function(desc) {
     }
 
     if (!is.null(desc$RemoteSha)) {
-      sha <- paste0("@", substr(desc$RemoteSha, 1, 7))
+      sha <- paste0("@", desc$RemoteSha)
     } else {
       sha <- NULL
     }
@@ -218,6 +220,10 @@ pkg_md5_disk <- function(pkgdir) {
   order_by_name(structure(unname(md5_files), names = tolower(dll_files)))
 }
 
+abbrev_long_sha <- function(x) {
+  sub("([0-9a-f]{7})[0-9a-f]{33}", "\\1", x)
+}
+
 #' @export
 
 format.packages_info <- function(x, ...) {
@@ -231,7 +237,7 @@ format.packages_info <- function(x, ...) {
     version      = ifelse(unloaded, x$ondiskversion, x$loadedversion),
     "date (UTC)" = x$date,
     lib          = paste0("[", flib(x$library), "]"),
-    source       = x$source,
+    source       = abbrev_long_sha(x$source),
     stringsAsFactors = FALSE,
     check.names = FALSE
   )
