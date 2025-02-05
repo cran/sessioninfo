@@ -4,12 +4,24 @@
 \alias{session_diff}
 \title{Compare session information from two sources}
 \usage{
-session_diff(old = "local", new = "clipboard", ...)
+session_diff(
+  old = "local",
+  new = "clipboard",
+  packages = c("diff", "merge"),
+  ...
+)
 }
 \arguments{
 \item{old, new}{A \code{session_info} object (the return value of
 \code{\link[=session_info]{session_info()}}), or a pointer to \code{\link[=session_info]{session_info()}} output. See details
 below.}
+
+\item{packages}{How to compare the package info for \code{old} and \code{new}:
+\itemize{
+\item \code{"diff"}: line diffs, in the style of \code{diff -u}
+\item \code{"merge"}: merge the information into one data frame, with one row per
+package. Only package \code{version} and \code{source} are compared.
+}}
 
 \item{...}{Passed to any new \code{\link[=session_info]{session_info()}} calls.}
 }
@@ -25,9 +37,17 @@ session, and uses its output.
 \item \code{"clipboard"} takes the session info from the system clipboard.
 If the clipboard contains a URL, it is followed to download the
 session info.
-\item A URL starting with \verb{http://} or \verb{https://}. \code{session_diff} searches
-the HTML (or text) page for the session info header to find the session
-info.
+\item The URL where you inspect the results for a GitHub Actions job.
+Typically has this form:
+
+\if{html}{\out{<div class="sourceCode">}}\preformatted{https://github.com/OWNER/REPO/actions/runs/RUN_ID/jobs/HTML_ID
+}\if{html}{\out{</div>}}
+
+Internally, this URL is parsed so we can look up the job id, get the
+log file, and extract session info.
+\item Any other URL starting with \verb{http://} or \verb{https://}. \code{session_diff()}
+searches the HTML (or text) page for the session info header to find the
+session info.
 }
 }
 \examples{

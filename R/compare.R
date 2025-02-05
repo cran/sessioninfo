@@ -4,6 +4,10 @@
 #' @param old,new A `session_info` object (the return value of
 #' [session_info()]), or a pointer to [session_info()] output. See details
 #' below.
+#' @param packages How to compare the package info for `old` and `new`:
+#' * `"diff"`: line diffs, in the style of `diff -u`
+#' * `"merge"`: merge the information into one data frame, with one row per
+#'   package. Only package `version` and `source` are compared.
 #' @param ... Passed to any new [session_info()] calls.
 #'
 #' @details
@@ -14,15 +18,26 @@
 #' * `"clipboard"` takes the session info from the system clipboard.
 #'   If the clipboard contains a URL, it is followed to download the
 #'   session info.
-#' * A URL starting with `http://` or `https://`. `session_diff` searches
-#'   the HTML (or text) page for the session info header to find the session
-#'   info.
+#' * The URL where you inspect the results for a GitHub Actions job.
+#'   Typically has this form:
+#'   ```
+#'   https://github.com/OWNER/REPO/actions/runs/RUN_ID/jobs/HTML_ID
+#'   ```
+#'   Internally, this URL is parsed so we can look up the job id, get the
+#'   log file, and extract session info.
+#' * Any other URL starting with `http://` or `https://`. `session_diff()`
+#'   searches the HTML (or text) page for the session info header to find the
+#'   session info.
+#'
 #'
 #' @export
 #' @examplesIf FALSE
 #' session_diff()
 
-session_diff <- function(old = "local", new = "clipboard", ...) {
+session_diff <- function(old = "local", new = "clipboard",
+                         packages = c("diff", "merge"), ...) {
+
+  packages <- match.arg(packages)
 
   oldname <- get_symbol_name(substitute(old))
   newname <- get_symbol_name(substitute(new))
@@ -33,7 +48,7 @@ session_diff <- function(old = "local", new = "clipboard", ...) {
   ret <- list(
     old = old,
     new = new,
-    diff = session_diff_text(old$text, new$text)
+    diff = session_diff_text(old$text, new$text, packages)
   )
 
   class(ret) <- c("session_diff", "list")
@@ -61,6 +76,8 @@ get_session_info <- function(src, name = NULL, ...) {
     get_session_info_local(...)
   } else if (is_string(src) == 1 && src == "clipboard") {
     get_session_info_clipboard()
+  } else if (is_string(src) && is_gha_url(src)) {
+    get_session_info_gha(src)
   } else if (is_string(src) && grepl("https?://", src)) {
     get_session_info_url(src)
   } else {
@@ -101,6 +118,14 @@ find_session_info_in_html <- function(url, lines) {
   re_start <- "[-=\u2500\u2550][ ]Session info[ ]"
   cand <- grep(re_start, lines)
   if (length(cand) == 0) stop("Cannot find session info at '", url, "'.")
+
+  # in the new GH HTML the whole comment is a data field that we extract
+  if (any(grepl("\\n", lines, fixed = TRUE))) {
+    lines <- gsub("\\r", "", lines, fixed = TRUE)
+    lines <- unlist(strsplit(lines, "\\n", fixed = TRUE))
+    cand <- grep(re_start, lines)
+    if (length(cand) == 0) stop("Cannot find session info at '", url, "'.")
+  }
 
   # check if the URL has an anchor and that the anchor exists in HTML
   # if yes, then we "skip" there
@@ -195,7 +220,9 @@ beginning <- function(x) {
   trimws(substr(paste0(x123, sep = "\n"), 1, 100))
 }
 
-session_diff_text <- function(old, new) {
+session_diff_text <- function(old, new, packages = c("diff", "merge")) {
+  packages <- match.arg(packages)
+
   old <- enc2utf8(old)
   new <- enc2utf8(new)
 
@@ -209,10 +236,16 @@ session_diff_text <- function(old, new) {
   old <- diff_fix_lines(old, min)
   new <- diff_fix_lines(new, min)
 
-  # expand thinner package info to match the wider one
+  package_fixup_fun <- switch(
+    packages,
+    # expands package info with fewer columns to match one with more
+    diff = expand_diff_text,
+    # full-joins package info to concentrate each diff in a single row
+    merge = merge_packages
+  )
   # do not error, in case we cannot parse sessioninfo output
   suppressWarnings(tryCatch({
-    exp <- expand_diff_text(old, new)
+    exp <- package_fixup_fun(old, new)
     old <- exp$old
     new <- exp$new
   }, error = function(e) NULL))
@@ -312,6 +345,55 @@ expand_diff_text <- function(old, new) {
   new <- insert_instead(new, npkgs$begin, npkgs$end, fmt_new)
 
   list(old = old, new = new)
+}
+
+merge_packages <- function(old, new) {
+  opkgs <- parse_pkgs(old)
+  npkgs <- parse_pkgs(new)
+
+  if (is.null(opkgs) || is.null(opkgs)) return(list(old = old, new = new))
+
+  names_to_keep <- c("package", "version", "source")
+  opkgs$pkgs <- opkgs$pkgs[names_to_keep]
+  npkgs$pkgs <- npkgs$pkgs[names_to_keep]
+  names(opkgs$pkgs) <- c("package", "old_version", "old_source")
+  names(npkgs$pkgs) <- c("package", "new_version", "new_source")
+
+  merge_res <- merge(opkgs$pkgs, npkgs$pkgs, all = TRUE)
+  merge_res <- with(merge_res,
+       data.frame(
+         package = package,
+         "v!=" = mark(is_different(old_version, new_version)),
+         old_version = old_version,
+         new_version = new_version,
+         "s!=" = mark(is_different(old_source, new_source)),
+         old_source = old_source,
+         new_source = new_source,
+         stringsAsFactors = FALSE,
+         row.names = NULL,
+         check.names = FALSE
+       )
+  )
+
+  oldopts <- options(cli.num_colors = 1)
+  on.exit(options(oldopts), add = TRUE)
+  fmt <- format_df(merge_res)
+
+  old <- insert_instead(old, opkgs$begin, opkgs$end, fmt)
+  new <- insert_instead(new, npkgs$begin, npkgs$end, fmt)
+
+  list(old = old, new = new)
+}
+
+is_different <- function(x, y) {
+  x_na <- is.na(x)
+  y_na <- is.na(y)
+  no_na <- !x_na & !y_na
+  xor(x_na, y_na) | (no_na & (x != y))
+}
+
+mark <- function(x, mark = ">>") {
+  ifelse(x, mark, "")
 }
 
 insert_instead <- function(orig, from, to, new) {

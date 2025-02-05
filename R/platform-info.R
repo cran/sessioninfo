@@ -7,6 +7,9 @@
 #'   * `system`: CPU, and machine readable OS name, separated by a comma.
 #'   * `ui`: the user interface, e.g. `Rgui`, `RTerm`, etc. see `GUI`
 #'     in [base::.Platform].
+#'   * `hostname`: the name of the machine known on the network, see
+#'     `nodename` in [base::Sys.info()]. For privacy, it is only included
+#'     if the `sessioninfo.include_hostname` option is set to `TRUE`.
 #'   * `language`: The current language setting. The `LANGUAGE` environment
 #'     variable, if set, or `(EN)` if unset.
 #'   * `collate`: Collation rule, from the current locale.
@@ -15,6 +18,7 @@
 #'   * `date`: The current date.
 #'   * `rstudio`: RStudio format string, only added in RStudio.
 #'   * `pandoc`: pandoc version and path
+#'   * `quarto`: quarto version and path
 #'
 #' @seealso Similar functions and objects in the base packages:
 #'   [base::R.version.string], [utils::sessionInfo()], [base::version],
@@ -25,10 +29,14 @@
 #' platform_info()
 
 platform_info <- function() {
+  include_hostname <- isTRUE(getOption("sessioninfo.include_hostname"))
   as_platform_info(drop_null(list(
     version = R.version.string,
     os = os_name(),
     system = version$system,
+    hostname = if (include_hostname) {
+      Sys.info()[["nodename"]]
+    },
     ui = .Platform$GUI,
     language = Sys.getenv("LANGUAGE", "(EN)"),
     collate = Sys.getlocale("LC_COLLATE"),
@@ -36,7 +44,8 @@ platform_info <- function() {
     tz = Sys.timezone(),
     date = format(Sys.Date()),
     rstudio = get_rstudio_version(),
-    pandoc = get_pandoc_version()
+    pandoc = get_pandoc_version(),
+    quarto = get_quarto_version()
   )))
 }
 
@@ -75,6 +84,20 @@ parse_pandoc_version <- function(path) {
     out <- system2(path, "--version", stdout = TRUE)[1]
     last(strsplit(out, " ", fixed = TRUE)[[1]])
   }, error = function(e) "NA")
+}
+
+get_quarto_version <- function() {
+    path <- Sys.which("quarto")
+    if (path == "") {
+      "NA"
+    } else {
+      tmp <- tempfile()
+      on.exit(unlink(tmp, recursive = TRUE), add = TRUE)
+      dir.create(tmp, recursive = TRUE, showWarnings = FALSE)
+      tmp <- normalizePath(tmp, winslash = "/")
+      ver <- system2("quarto", "-V", stdout = TRUE, env = paste0("TMPDIR=", tmp))[1]
+      paste0(ver, " @ ", path)
+    }
 }
 
 #' @export

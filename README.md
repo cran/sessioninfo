@@ -5,10 +5,10 @@
 
 <!-- badges: start -->
 [![Lifecycle: stable](https://lifecycle.r-lib.org/articles/figures/lifecycle-stable.svg)](https://lifecycle.r-lib.org/articles/stages.html)
-[![R build status](https://github.com/r-lib/sessioninfo/workflows/R-CMD-check/badge.svg)](https://github.com/r-lib/sessioninfo/actions)
+[![R-CMD-check](https://github.com/r-lib/sessioninfo/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/r-lib/sessioninfo/actions/workflows/R-CMD-check.yaml)
 [![](https://www.r-pkg.org/badges/version/sessioninfo)](https://www.r-pkg.org/pkg/sessioninfo)
 [![CRAN RStudio mirror downloads](https://cranlogs.r-pkg.org/badges/sessioninfo)](https://www.r-pkg.org/pkg/sessioninfo)
-[![Coverage Status](https://img.shields.io/codecov/c/github/r-lib/sessioninfo/master.svg)](https://codecov.io/github/r-lib/sessioninfo?branch=master)
+[![Codecov test coverage](https://codecov.io/gh/r-lib/sessioninfo/branch/main/graph/badge.svg)](https://app.codecov.io/gh/r-lib/sessioninfo?branch=main)
 <!-- badges: end -->
 
 Query and print information about the current R session. It is similar to
@@ -26,7 +26,7 @@ where they were installed from.
   etc.
 * Highlight packages from unusual sources.
 * Information about external software via `external_info()`.
-* Information about the Python configuration is the reticulate package is
+* Information about the Python configuration if the reticulate package is
   loaded and configured.
 * Information about package libraries.
 * Compare two session info outputs with the `session_diff()` function.
@@ -35,8 +35,17 @@ where they were installed from.
 
 ## Installation
 
+Install the released version from CRAN
+
 ```r
 install.packages("sessioninfo")
+```
+
+Or the development version from GitHub:
+
+```r
+# install.packages("pak")
+pak::pak("r-lib/sessioninfo")
 ```
 
 ## Usage
@@ -47,7 +56,7 @@ Example output:
 sessioninfo::session_info()
 ```
 
-<img width="1000" src="https://raw.githubusercontent.com/r-lib/sessioninfo/main/man/figures/session-info2.svg">
+<img width="1000" src="https://raw.githubusercontent.com/r-lib/sessioninfo/main/man/figures/session-info2.svg" alt="Screenshot of a terminal window demonstrating example output of the sessioninfo function.">
 
 ### Copying to the clipboard
 
@@ -207,6 +216,13 @@ sessioninfo::session_diff(new = "https://github.com/r-lib/sessioninfo/issues/6")
   [1] /Users/gaborcsardi/Library/R/x86_64/4.1/library
   [2] /Library/Frameworks/R.framework/Versions/4.1/Resources/library
 ```
+
+## Code of Conduct
+
+Please note that the sessioninfo project is released with a
+[Contributor Code of Conduct](
+  https://sessioninfo.r-lib.org/dev/CODE_OF_CONDUCT.html). By contributing to
+this project, you agree to abide by its terms.
 
 ## License
 
